@@ -1,19 +1,26 @@
 """Module to manipulate geometry of pyvista meshes"""
 
+from typing import cast
+
 import numpy as np
+import numpy.typing as npt
 import pyvista as pv
 from scipy.spatial import distance_matrix
 from shapely import Polygon, intersects
+from shapely.geometry.base import BaseGeometry
 from sklearn.cluster import AgglomerativeClustering
 
 from party_walls.helpers.geometry import plane_params, project_mesh, to_3d
 
 
-def get_points_of_type(mesh, surface_type):
+def get_points_of_type(
+    mesh: pv.PolyData,
+    surface_type: str,
+) -> npt.NDArray[np.float64]:
     """Returns the points that belong to the given surface type"""
 
     if "semantics" not in mesh.cell_data:
-        return []
+        return np.empty((0, 3), dtype=np.float64)
 
     idxs = [s == surface_type for s in mesh.cell_data["semantics"]]
 
@@ -22,67 +29,80 @@ def get_points_of_type(mesh, surface_type):
     )
 
     if all([not i for i in idxs]):
-        return []
+        return np.empty((0, 3), dtype=np.float64)
 
-    return np.vstack(points[idxs])
+    return np.vstack(points[idxs])  # type: ignore[return-value]
 
 
-def move_to_origin(mesh):
+def move_to_origin(
+    mesh: pv.PolyData,
+) -> tuple[pv.PolyData, npt.NDArray[np.float64]]:
     """Moves the object to the origin"""
     pts = mesh.points
-    t = np.min(pts, axis=0)
+    t: npt.NDArray[np.float64] = np.min(pts, axis=0)
     mesh.points = mesh.points - t
 
     return mesh, t
 
 
-def extrude(shape, min, max):
+def extrude(shape: Polygon, min: float, max: float) -> pv.PolyData:
     """Create a pyvista mesh from a polygon"""
 
-    points = np.array([[p[0], p[1], min] for p in shape.boundary.coords])
+    points = np.array([[p[0], p[1], min] for p in shape.exterior.coords])
     mesh = pv.PolyData(points).delaunay_2d()
 
     if min == max:
-        return mesh
+        return cast(pv.PolyData, mesh)
 
     # Transform to 0, 0, 0 to avoid precision issues
     pts = mesh.points
     t = np.mean(pts, axis=0)
     mesh.points = mesh.points - t
 
-    mesh = mesh.extrude([0.0, 0.0, max - min], capping=True)
+    extruded = cast(pv.PolyData, mesh.extrude([0.0, 0.0, max - min], capping=True))
 
     # Transform back to origina coords
-    # mesh.points = mesh.points + t
+    # extruded.points = extruded.points + t
 
-    mesh = mesh.clean().triangulate()
-
-    return mesh
+    return cast(pv.PolyData, extruded.clean().triangulate())
 
 
-def area_by_surface(mesh, sloped_angle_threshold=3, tri_mesh=None):
+def area_by_surface(
+    mesh: pv.PolyData,
+    sloped_angle_threshold: float = 3,
+    tri_mesh: pv.PolyData | None = None,
+) -> tuple[dict[str, float], dict[str, int], dict[str, int]]:
     """Compute the area per semantic surface"""
 
     sloped_threshold = np.cos(np.radians(sloped_angle_threshold))
 
-    area = {
-        "GroundSurface": 0,
-        "WallSurface": 0,
-        "RoofSurfaceFlat": 0,
-        "RoofSurfaceSloped": 0,
+    area: dict[str, float] = {
+        "GroundSurface": 0.0,
+        "WallSurface": 0.0,
+        "RoofSurfaceFlat": 0.0,
+        "RoofSurfaceSloped": 0.0,
     }
 
-    point_count = {"GroundSurface": 0, "WallSurface": 0, "RoofSurface": 0}
+    point_count: dict[str, int] = {
+        "GroundSurface": 0,
+        "WallSurface": 0,
+        "RoofSurface": 0,
+    }
 
-    surface_count = {"GroundSurface": 0, "WallSurface": 0, "RoofSurface": 0}
+    surface_count: dict[str, int] = {
+        "GroundSurface": 0,
+        "WallSurface": 0,
+        "RoofSurface": 0,
+    }
 
     # Compute the triangulated surfaces to fix issues with areas
-    if tri_mesh is None:
-        tri_mesh = mesh.triangulate()
+    effective_tri: pv.PolyData = (
+        tri_mesh if tri_mesh is not None else cast(pv.PolyData, mesh.triangulate())
+    )
 
     if "semantics" in mesh.cell_data:
         # Compute area per surface type
-        sized = tri_mesh.compute_cell_sizes()
+        sized = cast(pv.PolyData, effective_tri.compute_cell_sizes())
         surface_areas = sized.cell_data["Area"]
 
         points_per_cell = np.array(
@@ -91,32 +111,32 @@ def area_by_surface(mesh, sloped_angle_threshold=3, tri_mesh=None):
 
         for surface_type in ["GroundSurface", "WallSurface", "RoofSurface"]:
             triangle_idxs_mask = [
-                s == surface_type for s in tri_mesh.cell_data["semantics"]
+                s == surface_type for s in effective_tri.cell_data["semantics"]
             ]
             triangle_idxs = [
                 i
-                for i, s in enumerate(tri_mesh.cell_data["semantics"])
+                for i, s in enumerate(effective_tri.cell_data["semantics"])
                 if s == surface_type
             ]
 
             if surface_type == "RoofSurface":
                 for idx in triangle_idxs:
                     if sized.cell_normals[idx].dot([0, 0, 1]) < sloped_threshold:
-                        area["RoofSurfaceSloped"] += surface_areas[idx]
+                        area["RoofSurfaceSloped"] += float(surface_areas[idx])
                     else:
-                        area["RoofSurfaceFlat"] += surface_areas[idx]
+                        area["RoofSurfaceFlat"] += float(surface_areas[idx])
             else:
-                area[surface_type] = sum(surface_areas[triangle_idxs_mask])
+                area[surface_type] = float(sum(surface_areas[triangle_idxs_mask]))
 
             face_idxs = [s == surface_type for s in mesh.cell_data["semantics"]]
 
-            point_count[surface_type] = sum(points_per_cell[face_idxs])
-            surface_count[surface_type] = sum(face_idxs)
+            point_count[surface_type] = int(sum(points_per_cell[face_idxs]))
+            surface_count[surface_type] = int(sum(face_idxs))
 
     return area, point_count, surface_count
 
 
-def face_planes(mesh):
+def face_planes(mesh: pv.PolyData) -> list[npt.NDArray[np.float64]]:
     """Return the params of all planes in a given mesh"""
 
     return [
@@ -126,14 +146,17 @@ def face_planes(mesh):
 
 
 def cluster_meshes(
-    meshes, angle_degree_threshold=5, dist_threshold=0.5, old_cluster_method=True
-):
+    meshes: list[pv.PolyData],
+    angle_degree_threshold: float = 5,
+    dist_threshold: float = 0.5,
+    old_cluster_method: bool = True,
+) -> tuple[list[npt.NDArray[np.intp]], int]:
     """Clusters the faces of the given meshes"""
 
     n_meshes = len(meshes)
 
     # Compute the "absolute" plane params for every face of the two meshes
-    planes = [face_planes(mesh) for mesh in meshes]
+    planes: list[list[npt.NDArray[np.float64]]] = [face_planes(mesh) for mesh in meshes]
     # convert to cosine distance value
     # cos_distance = 1 - cos_similarity
     # angle_rad = arccos(cos_similarity)
@@ -150,14 +173,17 @@ def cluster_meshes(
             all_planes, cos_dist_thres, dist_threshold
         )
 
-    labels = np.array_split(
+    labels: list[npt.NDArray[np.intp]] = np.array_split(
         all_labels, [meshes[m].n_cells for m in range(n_meshes - 1)]
     )
 
     return labels, n_clusters
 
 
-def cluster_faces_simple(data, threshold=0.1):
+def cluster_faces_simple(
+    data: npt.NDArray[np.float64],
+    threshold: float = 0.1,
+) -> tuple[npt.NDArray[np.intp], int]:
     """Clusters the given planes"""
     # we can delete the third column because it is all 0's for vertical planes
     ndata = np.delete(data, 2, 1)
@@ -171,19 +197,26 @@ def cluster_faces_simple(data, threshold=0.1):
     # dist_mat = np.minimum(dm1, dm2)
 
     clustering = AgglomerativeClustering(
-        n_clusters=None,
+        n_clusters=None,  # type: ignore[arg-type]
         distance_threshold=threshold,
         metric="precomputed",
         linkage="average",
     ).fit(dist_mat)
 
-    return clustering.labels_, clustering.n_clusters_
+    return clustering.labels_, clustering.n_clusters_  # type: ignore[return-value]
 
 
-def cluster_faces_alternative(data, angle_threshold=0.005, dist_threshold=0.2):
+def cluster_faces_alternative(
+    data: npt.NDArray[np.float64],
+    angle_threshold: float = 0.005,
+    dist_threshold: float = 0.2,
+) -> tuple[npt.NDArray[np.intp], int]:
     """Clusters the given planes"""
 
-    def groupby(a, clusterids):
+    def groupby(
+        a: npt.NDArray[np.float64],
+        clusterids: npt.NDArray[np.intp],
+    ) -> tuple[list[npt.NDArray[np.float64]], npt.NDArray[np.intp]]:
         # Get argsort indices, to be used to sort a and clusterids in the next steps
         sidx = clusterids.argsort(kind="mergesort")
         a_sorted = a[sidx]
@@ -213,7 +246,7 @@ def cluster_faces_alternative(data, angle_threshold=0.005, dist_threshold=0.2):
     # new method - angle clustering
     # pl_abc = ndata
     angle_clustering = AgglomerativeClustering(
-        n_clusters=None,
+        n_clusters=None,  # type: ignore[arg-type]
         metric="cosine",
         distance_threshold=angle_threshold,
         linkage="average",
@@ -222,7 +255,7 @@ def cluster_faces_alternative(data, angle_threshold=0.005, dist_threshold=0.2):
     angle_clusters, remap = groupby(ndata[:, 3:], angle_clustering.labels_)
 
     # get dist clusters for each angle cluster
-    labels_ = np.empty(0, dtype=int)
+    labels_: npt.NDArray[np.intp] = np.empty(0, dtype=int)
     min_label = 0
     for angle_cluster in angle_clusters:
         if angle_cluster.size == 1:
@@ -230,7 +263,7 @@ def cluster_faces_alternative(data, angle_threshold=0.005, dist_threshold=0.2):
             min_label += 1
         else:
             dist_clustering = AgglomerativeClustering(
-                n_clusters=None,
+                n_clusters=None,  # type: ignore[arg-type]
                 metric="euclidean",
                 distance_threshold=dist_threshold,
                 linkage="average",
@@ -240,22 +273,35 @@ def cluster_faces_alternative(data, angle_threshold=0.005, dist_threshold=0.2):
 
     # re order back to input data order
     n_planes = ndata.shape[0]
-    labels = np.empty(n_planes, dtype=int)
+    labels: npt.NDArray[np.intp] = np.empty(n_planes, dtype=int)
     labels[remap] = labels_
 
-    n_clusters = (np.bincount(labels) != 0).sum()
+    n_clusters = int((np.bincount(labels) != 0).sum())
     return labels, n_clusters
 
 
-def intersect_surfaces(meshes, onlywalls=True):
+def intersect_surfaces(
+    meshes: list[pv.PolyData],
+    onlywalls: bool = True,
+) -> list[pv.PolyData]:
     """Return the intersection between the surfaces of multiple meshes.
 
     Note: first mesh is the target; following meshes are neighbors.
     """
 
-    def get_area_from_ring(areas, area, geom, normal, origin, subtract=False):
-        pts = to_3d(geom.coords, normal, origin)
-        common_mesh = pv.PolyData(pts, faces=[len(pts)] + list(range(len(pts))))
+    def get_area_from_ring(
+        areas: list[pv.PolyData],
+        area: float,
+        geom: BaseGeometry,
+        normal: npt.ArrayLike,
+        origin: npt.ArrayLike,
+        subtract: bool = False,
+    ) -> None:
+        pts = to_3d(geom.coords, normal, origin)  # type: ignore[attr-defined]
+        common_mesh = cast(
+            pv.PolyData,
+            pv.PolyData(pts, faces=[len(pts)] + list(range(len(pts)))),
+        )
         if subtract:
             common_mesh["area"] = [-area]
         else:
@@ -263,32 +309,46 @@ def intersect_surfaces(meshes, onlywalls=True):
         common_mesh["pts"] = pts
         areas.append(common_mesh)
 
-    def get_area_from_polygon(areas, geom, normal, origin):
+    def get_area_from_polygon(
+        areas: list[pv.PolyData],
+        geom: BaseGeometry,
+        normal: npt.ArrayLike,
+        origin: npt.ArrayLike,
+    ) -> None:
         # polygon with holes:
         if geom.boundary.geom_type == "MultiLineString":
-            get_area_from_ring(areas, geom.area, geom.boundary.geoms[0], normal, origin)
-            holes = [g for g in geom.boundary.geoms][1:]
+            get_area_from_ring(
+                areas,
+                float(geom.area),
+                geom.boundary.geoms[0],  # type: ignore[attr-defined]
+                normal,
+                origin,
+            )
+            holes = list(geom.boundary.geoms)[1:]  # type: ignore[attr-defined]
             for hole in holes:
-                get_area_from_ring(areas, 0, hole, normal, origin, subtract=True)
+                get_area_from_ring(areas, 0.0, hole, normal, origin, subtract=True)
         # polygon without holes:
         elif geom.boundary.geom_type == "LineString":
-            get_area_from_ring(areas, geom.area, geom.boundary, normal, origin)
+            get_area_from_ring(areas, float(geom.area), geom.boundary, normal, origin)
 
     n_meshes = len(meshes)
 
-    meshes_to_cluster = []
+    meshes_to_cluster: list[pv.PolyData] = []
     if onlywalls:
         for mesh in meshes:
             meshes_to_cluster.append(
-                mesh.remove_cells(
-                    [s != "WallSurface" for s in mesh.cell_data["semantics"]],
-                    inplace=False,
+                cast(
+                    pv.PolyData,
+                    mesh.remove_cells(
+                        [s != "WallSurface" for s in mesh.cell_data["semantics"]],
+                        inplace=False,
+                    ),
                 )
             )
     else:
         meshes_to_cluster = meshes
 
-    areas = []
+    areas: list[pv.PolyData] = []
 
     labels, n_clusters = cluster_meshes(meshes_to_cluster)
 
@@ -302,7 +362,10 @@ def intersect_surfaces(meshes, onlywalls=True):
             continue
 
         msurfaces = [
-            mesh.extract_cells(idxs[i]).extract_surface()
+            cast(
+                pv.PolyData,
+                mesh.extract_cells(idxs[i]).extract_surface(),
+            )
             for i, mesh in enumerate(meshes_to_cluster)
         ]
 
@@ -317,7 +380,7 @@ def intersect_surfaces(meshes, onlywalls=True):
         polys = [project_mesh(msurface, normal, origin) for msurface in msurfaces]
 
         # Intersect the 2D polygons
-        inter = Polygon()
+        inter: BaseGeometry = Polygon()
         poly_0 = polys[0]
         for i in range(1, len(polys)):
             if intersects(poly_0, polys[i]):
@@ -331,7 +394,7 @@ def intersect_surfaces(meshes, onlywalls=True):
                 inter.geom_type == "MultiPolygon"
                 or inter.geom_type == "GeometryCollection"
             ):
-                for geom in inter.geoms:
+                for geom in inter.geoms:  # type: ignore[attr-defined]
                     if geom.geom_type != "Polygon":
                         continue
                     get_area_from_polygon(areas, geom, normal, origin)

@@ -1,6 +1,9 @@
 """Module with functions for manipulating CityJSON data"""
 
+from typing import Any, cast
+
 import numpy as np
+import numpy.typing as npt
 import pyvista as pv
 from shapely.geometry import MultiPolygon, Polygon
 
@@ -8,30 +11,36 @@ from party_walls.helpers.geometry import (
     triangulate_polygon,
 )
 
+# A CityJSON geometry object (MultiSurface, Solid, etc.)
+CityJSONGeom = dict[str, Any]
 
-def get_surface_boundaries(geom):
+
+def get_surface_boundaries(geom: CityJSONGeom) -> list[Any]:
     """Returns the boundaries for all surfaces"""
 
     if geom["type"] == "MultiSurface" or geom["type"] == "CompositeSurface":
-        return geom["boundaries"]
+        return geom["boundaries"]  # type: ignore[no-any-return]
     elif geom["type"] == "Solid":
-        return geom["boundaries"][0]
+        return geom["boundaries"][0]  # type: ignore[no-any-return]
     else:
-        raise Exception("Geometry not supported")
+        raise ValueError(f"Geometry type {geom['type']!r} not supported")
 
 
-def get_points(geom, verts):
+def get_points(geom: CityJSONGeom, verts: npt.ArrayLike) -> list[Any]:
     """Return the points of the geometry"""
 
     boundaries = get_surface_boundaries(geom)
+    v = np.asarray(verts)
 
-    f = [v for ring in boundaries for v in ring[0]]
-    points = [verts[i] for i in f]
-
-    return points
+    f = [idx for ring in boundaries for idx in ring[0]]
+    return [v[i].tolist() for i in f]
 
 
-def to_shapely(geom, vertices, ground_only=True):
+def to_shapely(
+    geom: CityJSONGeom,
+    vertices: npt.NDArray[np.float64],
+    ground_only: bool = True,
+) -> MultiPolygon:
     """Returns a shapely geometry of the footprint from a CityJSON geometry"""
 
     boundaries = get_surface_boundaries(geom)
@@ -53,12 +62,13 @@ def to_shapely(geom, vertices, ground_only=True):
         [Polygon([vertices[v] for v in boundary[0]]) for boundary in boundaries]
     )
 
-    shape = shape.buffer(0)
-
-    return shape
+    return shape.buffer(0)  # type: ignore[return-value]
 
 
-def to_polydata(geom, vertices):
+def to_polydata(
+    geom: CityJSONGeom,
+    vertices: npt.NDArray[np.float64],
+) -> pv.PolyData:
     """Returns the polydata mesh from a CityJSON geometry"""
 
     boundaries = get_surface_boundaries(geom)
@@ -75,16 +85,23 @@ def to_polydata(geom, vertices):
         else:
             values = semantics["values"][0]
 
-        mesh.cell_data["semantics"] = [semantics["surfaces"][i]["type"] for i in values]
+        mesh.cell_data["semantics"] = [  # type: ignore[assignment]
+            semantics["surfaces"][i]["type"] for i in values
+        ]
 
     return mesh
 
 
-def to_triangulated_polydata(geom, vertices, clean=True):
-    """Returns the polydata mesh from a CityJSON geometry"""
+def to_triangulated_polydata(
+    geom: CityJSONGeom,
+    vertices: npt.NDArray[np.float64],
+    clean: bool = True,
+) -> pv.PolyData:
+    """Returns the triangulated polydata mesh from a CityJSON geometry"""
 
     boundaries = get_surface_boundaries(geom)
 
+    semantic_types: list[str] = []
     if "semantics" in geom:
         semantics = geom["semantics"]
         if geom["type"] == "MultiSurface":
@@ -94,9 +111,9 @@ def to_triangulated_polydata(geom, vertices, clean=True):
 
         semantic_types = [semantics["surfaces"][i]["type"] for i in values]
 
-    points = []
-    triangles = []
-    semantics = []
+    points: list[Any] = []
+    triangles: list[Any] = []
+    face_semantics: list[str] = []
     triangle_count = 0
     for fid, face in enumerate(boundaries):
         try:
@@ -110,23 +127,26 @@ def to_triangulated_polydata(geom, vertices, clean=True):
 
         triangle_count += t_count
 
-        if "semantics" in geom:
-            semantics.extend([semantic_types[fid] for _ in np.arange(t_count)])
+        if semantic_types:
+            face_semantics.extend([semantic_types[fid] for _ in np.arange(t_count)])
 
     mesh = pv.PolyData(points, triangles)
 
-    if "semantics" in geom:
-        mesh["semantics"] = semantics
+    if semantic_types:
+        mesh["semantics"] = face_semantics  # type: ignore[assignment]
 
     if clean:
-        mesh = mesh.clean()
+        mesh = cast(pv.PolyData, mesh.clean())
 
     return mesh
 
 
-def get_bbox(geom, verts):
+def get_bbox(
+    geom: CityJSONGeom,
+    verts: npt.ArrayLike,
+) -> npt.NDArray[np.float64]:
     pts = np.array(get_points(geom, verts))
 
-    return np.hstack(
+    return np.hstack(  # type: ignore[return-value]
         [[np.min(pts[:, i]), np.max(pts[:, i])] for i in range(np.shape(pts)[1])]
     )
