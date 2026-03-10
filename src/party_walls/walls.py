@@ -14,7 +14,8 @@ from party_walls import cityjson, geometry
 def filter_lod(cm, lod="2.2"):
     for co_id in cm["CityObjects"]:
         co = cm["CityObjects"][co_id]
-        co["geometry"] = [g for g in co["geometry"] if str(g["lod"]) == str(lod)]
+        if "geometry" in co:
+            co["geometry"] = [g for g in co["geometry"] if str(g["lod"]) == str(lod)]
 
 
 class CityModel:

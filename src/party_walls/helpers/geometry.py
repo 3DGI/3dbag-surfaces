@@ -49,12 +49,16 @@ def triangulate(mesh):
     final_mesh = pv.PolyData()
     n_cells = mesh.n_cells
     for i in np.arange(n_cells):
-        if not mesh.cell_type(i) in [5, 6, 7, 9, 10]:
+        cell = mesh.get_cell(i)
+        if not cell.type in [5, 6, 7, 9, 10]:
             continue
 
-        pts = mesh.cell_points(i)
+        pts = cell.points
         p = project_2d(pts, mesh.face_normals[i])
-        result = earcut.triangulate_float32(p, [len(p)])
+        result = earcut.triangulate_float32(
+            np.array(p, dtype=np.float32),
+            np.array([len(p)], dtype=np.uint32),
+        ).astype(np.int64)
 
         t_count = len(result.reshape(-1,3))
         triangles = np.hstack([[3] + list(t) for t in result.reshape(-1,3)])
@@ -79,7 +83,10 @@ def triangulate_polygon(face, vertices, offset = 0):
 
     points_2d = project_2d(points, normal)
 
-    result = earcut.triangulate_float32(points_2d, holes)
+    result = earcut.triangulate_float32(
+        np.array(points_2d, dtype=np.float32),
+        np.array(holes, dtype=np.uint32),
+    ).astype(np.int64)
 
     result += offset
 
@@ -94,7 +101,7 @@ def plane_params(normal, origin, rounding=2):
     """Returns the params (a, b, c, d) of the plane equation for the given
     normal and origin point.
     """
-    a, b, c = np.round_(normal, 3)
+    a, b, c = np.round(normal, 3)
     x0, y0, z0 = origin
 
     d = -(a * x0 + b * y0 + c * z0)
@@ -108,7 +115,7 @@ def project_mesh(mesh, normal, origin):
     """Project the faces of a mesh to the given plane"""
     p = []
     for i in range(mesh.n_cells):
-        pts = mesh.cell_points(i)
+        pts = mesh.get_cell(i).points
 
         pts_2d = project_2d(pts, normal, origin)
         p.append(Polygon(pts_2d))
