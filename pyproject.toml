@@ -27,4 +27,18 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "ruff>=0.15.5",
 ]
+
+[tool.ruff]
+src = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = false
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+

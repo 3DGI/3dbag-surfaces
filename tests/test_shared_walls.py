@@ -15,10 +15,10 @@ from shapely import MultiPolygon
 
 from party_walls.walls import shared_walls
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _box_cityjson(x0, y0, x1, y1, z0, z1, obj_id):
     """Return a minimal CityJSON dict for a box building."""
@@ -96,6 +96,7 @@ def adjacent():
 # Tests
 # ---------------------------------------------------------------------------
 
+
 def test_shared_wall_area(target, adjacent):
     result = shared_walls(target=target, adjacent=[adjacent])
 
@@ -153,4 +154,6 @@ def test_input_dicts_not_mutated(target, adjacent):
     shared_walls(target=target, adjacent=[adjacent])
 
     assert len(target_cm["CityObjects"][target_id]["geometry"]) == target_geom_count
-    assert len(adjacent_cm["CityObjects"][adjacent_id]["geometry"]) == adjacent_geom_count
+    assert (
+        len(adjacent_cm["CityObjects"][adjacent_id]["geometry"]) == adjacent_geom_count
+    )

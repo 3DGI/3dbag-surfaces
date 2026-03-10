@@ -1,9 +1,13 @@
 """Module with functions for manipulating CityJSON data"""
 
 import numpy as np
-from shapely.geometry import Polygon, MultiPolygon
-from party_walls.helpers.geometry import project_2d, surface_normal, triangulate, triangulate_polygon
 import pyvista as pv
+from shapely.geometry import MultiPolygon, Polygon
+
+from party_walls.helpers.geometry import (
+    triangulate_polygon,
+)
+
 
 def get_surface_boundaries(geom):
     """Returns the boundaries for all surfaces"""
@@ -15,6 +19,7 @@ def get_surface_boundaries(geom):
     else:
         raise Exception("Geometry not supported")
 
+
 def get_points(geom, verts):
     """Return the points of the geometry"""
 
@@ -24,6 +29,7 @@ def get_points(geom, verts):
     points = [verts[i] for i in f]
 
     return points
+
 
 def to_shapely(geom, vertices, ground_only=True):
     """Returns a shapely geometry of the footprint from a CityJSON geometry"""
@@ -37,15 +43,20 @@ def to_shapely(geom, vertices, ground_only=True):
         else:
             values = semantics["values"][0]
 
-        ground_idxs = [semantics["surfaces"][i]["type"] == "GroundSurface" for i in values]
+        ground_idxs = [
+            semantics["surfaces"][i]["type"] == "GroundSurface" for i in values
+        ]
 
         boundaries = np.array(boundaries, dtype=object)[ground_idxs]
 
-    shape = MultiPolygon([Polygon([vertices[v] for v in boundary[0]]) for boundary in boundaries])
+    shape = MultiPolygon(
+        [Polygon([vertices[v] for v in boundary[0]]) for boundary in boundaries]
+    )
 
     shape = shape.buffer(0)
 
     return shape
+
 
 def to_polydata(geom, vertices):
     """Returns the polydata mesh from a CityJSON geometry"""
@@ -68,6 +79,7 @@ def to_polydata(geom, vertices):
 
     return mesh
 
+
 def to_triangulated_polydata(geom, vertices, clean=True):
     """Returns the polydata mesh from a CityJSON geometry"""
 
@@ -89,7 +101,7 @@ def to_triangulated_polydata(geom, vertices, clean=True):
     for fid, face in enumerate(boundaries):
         try:
             new_points, new_triangles = triangulate_polygon(face, vertices, len(points))
-        except:
+        except Exception:
             continue
 
         points.extend(new_points)
@@ -111,7 +123,10 @@ def to_triangulated_polydata(geom, vertices, clean=True):
 
     return mesh
 
+
 def get_bbox(geom, verts):
     pts = np.array(get_points(geom, verts))
 
-    return np.hstack([[np.min(pts[:, i]), np.max(pts[:, i])] for i in range(np.shape(pts)[1])])
+    return np.hstack(
+        [[np.min(pts[:, i]), np.max(pts[:, i])] for i in range(np.shape(pts)[1])]
+    )

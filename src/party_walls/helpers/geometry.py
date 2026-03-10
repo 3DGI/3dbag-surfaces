@@ -1,15 +1,16 @@
 """Module with functions for 3D geometrical operations"""
 
-import numpy as np
 import mapbox_earcut as earcut
+import numpy as np
 import pyvista as pv
-from shapely.geometry import Polygon, MultiPolygon
+from shapely.geometry import MultiPolygon, Polygon
+
 
 def surface_normal(poly):
     n = [0.0, 0.0, 0.0]
 
     for i, v_curr in enumerate(poly):
-        v_next = poly[(i+1) % len(poly)]
+        v_next = poly[(i + 1) % len(poly)]
         n[0] += (v_curr[1] - v_next[1]) * (v_curr[2] + v_next[2])
         n[1] += (v_curr[2] - v_next[2]) * (v_curr[0] + v_next[0])
         n[2] += (v_curr[0] - v_next[0]) * (v_curr[1] + v_next[1])
@@ -17,23 +18,25 @@ def surface_normal(poly):
     if all([c == 0 for c in n]):
         raise ValueError("No normal. Possible colinear points!")
 
-    normalised = [i/np.linalg.norm(n) for i in n]
+    normalised = [i / np.linalg.norm(n) for i in n]
 
     return normalised
+
 
 def axes_of_normal(normal):
     """Returns an x-axis and y-axis on a plane of the given normal"""
     if normal[2] > 0.001 or normal[2] < -0.001:
-        x_axis = [1, 0, -normal[0]/normal[2]];
+        x_axis = [1, 0, -normal[0] / normal[2]]
     elif normal[1] > 0.001 or normal[1] < -0.001:
-        x_axis = [1, -normal[0]/normal[1], 0];
+        x_axis = [1, -normal[0] / normal[1], 0]
     else:
-        x_axis = [-normal[1] / normal[0], 1, 0];
+        x_axis = [-normal[1] / normal[0], 1, 0]
 
     x_axis = x_axis / np.linalg.norm(x_axis)
     y_axis = np.cross(normal, x_axis)
 
     return x_axis, y_axis
+
 
 def project_2d(points, normal, origin=None):
     if origin is None:
@@ -43,6 +46,7 @@ def project_2d(points, normal, origin=None):
 
     return [[np.dot(p - origin, x_axis), np.dot(p - origin, y_axis)] for p in points]
 
+
 def triangulate(mesh):
     """Triangulates a mesh in the proper way"""
 
@@ -50,7 +54,7 @@ def triangulate(mesh):
     n_cells = mesh.n_cells
     for i in np.arange(n_cells):
         cell = mesh.get_cell(i)
-        if not cell.type in [5, 6, 7, 9, 10]:
+        if cell.type not in [5, 6, 7, 9, 10]:
             continue
 
         pts = cell.points
@@ -60,8 +64,8 @@ def triangulate(mesh):
             np.array([len(p)], dtype=np.uint32),
         ).astype(np.int64)
 
-        t_count = len(result.reshape(-1,3))
-        triangles = np.hstack([[3] + list(t) for t in result.reshape(-1,3)])
+        t_count = len(result.reshape(-1, 3))
+        triangles = np.hstack([[3] + list(t) for t in result.reshape(-1, 3)])
 
         new_mesh = pv.PolyData(pts, triangles, n_faces=t_count)
         for k in mesh.cell_data:
@@ -71,7 +75,8 @@ def triangulate(mesh):
 
     return final_mesh
 
-def triangulate_polygon(face, vertices, offset = 0):
+
+def triangulate_polygon(face, vertices, offset=0):
     """Returns the points and triangles for a given CityJSON polygon"""
 
     points = vertices[np.hstack(face)]
@@ -90,12 +95,13 @@ def triangulate_polygon(face, vertices, offset = 0):
 
     result += offset
 
-    t_count = len(result.reshape(-1,3))
+    t_count = len(result.reshape(-1, 3))
     if t_count == 0:
-        return points,  []
-    triangles = np.hstack([[3] + list(t) for t in result.reshape(-1,3)])
+        return points, []
+    triangles = np.hstack([[3] + list(t) for t in result.reshape(-1, 3)])
 
     return points, triangles
+
 
 def plane_params(normal, origin, rounding=2):
     """Returns the params (a, b, c, d) of the plane equation for the given
@@ -111,6 +117,7 @@ def plane_params(normal, origin, rounding=2):
 
     return np.array([a, b, c, d])
 
+
 def project_mesh(mesh, normal, origin):
     """Project the faces of a mesh to the given plane"""
     p = []
@@ -121,6 +128,7 @@ def project_mesh(mesh, normal, origin):
         p.append(Polygon(pts_2d))
 
     return MultiPolygon(p).buffer(0)
+
 
 def to_3d(points, normal, origin):
     """Returns the 3d coordinates of a 2d points from a given plane"""
