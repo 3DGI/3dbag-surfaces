@@ -1,1 +1,3 @@
 .idea
+tests/data
+tests/output
