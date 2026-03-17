@@ -11,13 +11,10 @@ import csv
 import json
 import re
 import shutil
-import struct
 import sqlite3
 from pathlib import Path
 
 import shapely.wkb
-from shapely.ops import unary_union
-
 
 ROOT = Path(__file__).parent.parent
 DATA = ROOT / "tests" / "data"
@@ -33,12 +30,16 @@ def parse_tile_id(path: Path) -> tuple[int, int, int]:
     return int(m.group(1)), int(m.group(2)), int(m.group(3))
 
 
-def compute_offsets(old_translate: list[float], new_translate: list[float]) -> list[int]:
+def compute_offsets(
+    old_translate: list[float], new_translate: list[float]
+) -> list[int]:
     """Integer vertex offsets to convert from old local to new global transform."""
     return [round((old_translate[i] - new_translate[i]) / SCALE) for i in range(3)]
 
 
-def retranslate_vertices(vertices: list[list[int]], offsets: list[int]) -> list[list[int]]:
+def retranslate_vertices(
+    vertices: list[list[int]], offsets: list[int]
+) -> list[list[int]]:
     return [[v[0] + offsets[0], v[1] + offsets[1], v[2] + offsets[2]] for v in vertices]
 
 
@@ -63,7 +64,16 @@ def process_jsonl(path: Path, new_translate: list[float], output_root: Path) -> 
         fid: str = feature["id"]
         feature["vertices"] = retranslate_vertices(feature["vertices"], offsets)
 
-        out_dir = output_root / "crop_reconstruct" / str(z) / str(x) / str(y) / "objects" / fid / "reconstruct"
+        out_dir = (
+            output_root
+            / "crop_reconstruct"
+            / str(z)
+            / str(x)
+            / str(y)
+            / "objects"
+            / fid
+            / "reconstruct"
+        )
         out_dir.mkdir(parents=True, exist_ok=True)
         out_file = out_dir / f"{fid}.city.jsonl"
         out_file.write_text(json.dumps(feature, separators=(",", ":")) + "\n")
@@ -72,7 +82,9 @@ def process_jsonl(path: Path, new_translate: list[float], output_root: Path) -> 
 def read_gpkg_geometries(gpkg_path: Path) -> list[tuple[str, object]]:
     """Return list of (identificatie, shapely_geometry) from pand layer."""
     conn = sqlite3.connect(gpkg_path)
-    rows = conn.execute("SELECT identificatie, geom FROM pand WHERE geom IS NOT NULL").fetchall()
+    rows = conn.execute(
+        "SELECT identificatie, geom FROM pand WHERE geom IS NOT NULL"
+    ).fetchall()
     conn.close()
 
     result = []

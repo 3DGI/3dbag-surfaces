@@ -1,7 +1,9 @@
 """Shared wall metrics for CityJSON building models."""
 
 import copy
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
@@ -139,3 +141,25 @@ def shared_walls(
         area_roof_flat=area["RoofSurfaceFlat"],
         area_roof_sloped=area["RoofSurfaceSloped"],
     )
+
+
+def write_cityjsonfeature(
+    feature: dict[str, Any],
+    result: SharedWallResult,
+    output_path: Path,
+) -> None:
+    """Write a CityJSONFeature with computed b3_* attributes injected."""
+    for obj in feature["CityObjects"].values():
+        if obj["type"] == "Building":
+            obj.setdefault("attributes", {}).update(
+                {
+                    "b3_opp_scheidingsmuur": result.area_shared_wall,
+                    "b3_opp_buitenmuur": result.area_exterior_wall,
+                    "b3_opp_grond": result.area_ground,
+                    "b3_opp_dak_plat": result.area_roof_flat,
+                    "b3_opp_dak_schuin": result.area_roof_sloped,
+                }
+            )
+            break
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(feature))

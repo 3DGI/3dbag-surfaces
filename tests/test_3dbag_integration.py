@@ -14,8 +14,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from shapely import MultiPolygon
 
-from party_walls.walls import shared_walls
+from party_walls.walls import SharedWallResult, shared_walls, write_cityjsonfeature
 
 # ---------------------------------------------------------------------------
 # Module-level setup
@@ -42,9 +43,7 @@ _TEST_IDS: list[str] = sorted(_AVAILABLE & _ADJACENCY.keys())
 
 
 def _load_cityjson(building_id: str, transform: dict[str, Any]) -> dict[str, Any]:
-    jsonl_path = (
-        OBJECTS_DIR / building_id / "reconstruct" / f"{building_id}.city.jsonl"
-    )
+    jsonl_path = OBJECTS_DIR / building_id / "reconstruct" / f"{building_id}.city.jsonl"
     feature = json.loads(jsonl_path.read_text().splitlines()[0])
     return {
         "type": "CityJSON",
@@ -89,9 +88,7 @@ def test_surface_areas(building_id: str) -> None:
     assert result.area_exterior_wall == pytest.approx(
         attrs["b3_opp_buitenmuur"], rel=0.20, abs=1.0
     )
-    assert result.area_ground == pytest.approx(
-        attrs["b3_opp_grond"], rel=0.10, abs=1.0
-    )
+    assert result.area_ground == pytest.approx(attrs["b3_opp_grond"], rel=0.10, abs=1.0)
     assert result.area_roof_flat == pytest.approx(
         attrs["b3_opp_dak_plat"], rel=0.20, abs=1.0
     )
@@ -129,3 +126,32 @@ def test_shared_wall_detection(building_id: str) -> None:
         f"(b3_opp_scheidingsmuur={attrs['b3_opp_scheidingsmuur']:.1f}), "
         f"missing_adjacents={missing_adj}"
     )
+
+
+def test_write_output(tmp_path: Path) -> None:
+    building_id = _TEST_IDS[0]
+    jsonl_path = OBJECTS_DIR / building_id / "reconstruct" / f"{building_id}.city.jsonl"
+    feature = json.loads(jsonl_path.read_text().splitlines()[0])
+
+    sentinel = SharedWallResult(
+        area_shared_wall=1.0,
+        area_exterior_wall=2.0,
+        shared_wall_geometry=MultiPolygon(),
+        area_ground=3.0,
+        area_roof_flat=4.0,
+        area_roof_sloped=5.0,
+    )
+
+    out_path = tmp_path / f"{building_id}.city.jsonl"
+    write_cityjsonfeature(feature, sentinel, out_path)
+
+    written = json.loads(out_path.read_text())
+    building_obj = next(
+        obj for obj in written["CityObjects"].values() if obj["type"] == "Building"
+    )
+    attrs = building_obj["attributes"]
+    assert attrs["b3_opp_scheidingsmuur"] == 1.0
+    assert attrs["b3_opp_buitenmuur"] == 2.0
+    assert attrs["b3_opp_grond"] == 3.0
+    assert attrs["b3_opp_dak_plat"] == 4.0
+    assert attrs["b3_opp_dak_schuin"] == 5.0
