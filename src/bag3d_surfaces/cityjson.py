@@ -7,7 +7,7 @@ import numpy.typing as npt
 import pyvista as pv
 from shapely.geometry import MultiPolygon, Polygon
 
-from party_walls.helpers.geometry import (
+from bag3d_surfaces.helpers.geometry import (
     triangulate_polygon,
 )
 

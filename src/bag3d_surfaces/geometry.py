@@ -10,7 +10,7 @@ from shapely import Polygon, intersects
 from shapely.geometry.base import BaseGeometry
 from sklearn.cluster import AgglomerativeClustering
 
-from party_walls.helpers.geometry import plane_params, project_mesh, to_3d
+from bag3d_surfaces.helpers.geometry import plane_params, project_mesh, to_3d
 
 
 def get_points_of_type(

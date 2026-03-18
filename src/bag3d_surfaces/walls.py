@@ -13,7 +13,7 @@ from pymeshfix import MeshFix
 from shapely import MultiPolygon
 from shapely.geometry import Polygon
 
-from party_walls import cityjson, geometry
+from bag3d_surfaces import cityjson, geometry
 
 CityJSONDict = dict[str, Any]
 
