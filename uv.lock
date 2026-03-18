@@ -13,7 +13,7 @@ wheels = [
 
 [[package]]
 name = "bag3d-surfaces"
-version = "2026.1003"
+version = "2026.1005"
 source = { editable = "." }
 dependencies = [
     { name = "mapbox-earcut" },
