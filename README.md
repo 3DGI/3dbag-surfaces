@@ -12,7 +12,10 @@ Or with [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv sync
+git config core.hooksPath .githooks
 ```
+
+The second command enables git hooks that automatically sync dependencies when bumping the version.
 
 ## Usage
 

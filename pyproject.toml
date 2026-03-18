@@ -76,10 +76,4 @@ push = true
     'version = "{version}"',
 ]
 
-[tool.bumpver.pre_commit]
-commands = [
-    "uv sync",
-    "git add uv.lock",
-]
-
 
