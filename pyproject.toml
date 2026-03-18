@@ -10,7 +10,7 @@ allow-direct-references = true
 
 [project]
 name = "bag3d-surfaces"
-version = "0.1.0"
+version = "2026.03.18"
 description = "Party wall statistics from CityJSON building models"
 requires-python = ">=3.12"
 readme = "README.md"
@@ -36,6 +36,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "bumpver>=2025.1131",
     "pyright>=1.1.408",
     "pytest>=9.0.2",
     "ruff>=0.15.5",
@@ -59,5 +60,23 @@ venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic"
 reportMissingTypeStubs = false
+
+[tool.bumpver]
+current_version = "2026.03.18"
+version_pattern = "YYYY.0M.0D"
+commit_message = "bump version {old_version} -> {new_version}"
+tag_message = "{new_version}"
+tag_scope = "default"
+pre_commit_hook = ""
+post_commit_hook = ""
+commit = true
+tag = true
+push = true
+
+[tool.bumpver.file_patterns]
+"pyproject.toml" = [
+    'current_version = "{version}"',
+    'version = "{version}"',
+]
 
 
