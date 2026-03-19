@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+# Check if this is a bumpver commit by detecting a version change in pyproject.toml
+if git diff --cached pyproject.toml | grep -q "^+version = "; then
+    uv sync
+    git add uv.lock
+fi
