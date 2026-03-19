@@ -1,9 +1,0 @@
-#!/bin/bash
-set -e
-
-# Check if this is a bumpver commit
-if grep -q "^bump version" .git/COMMIT_EDITMSG 2>/dev/null; then
-    # Only run on bumpver commits
-    uv sync
-    git add uv.lock
-fi

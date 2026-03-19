@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+# $1 is the path to the file containing the commit message
+if grep -q "^bump version" "$1" 2>/dev/null; then
+    # Only run on bumpver commits
+    uv sync
+    git add uv.lock
+fi
