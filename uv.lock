@@ -13,7 +13,7 @@ wheels = [
 
 [[package]]
 name = "building-surfaces"
-version = "2026.1005"
+version = "2026.1009"
 source = { editable = "." }
 dependencies = [
     { name = "mapbox-earcut" },
