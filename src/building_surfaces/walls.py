@@ -1,4 +1,4 @@
-"""Shared wall metrics for CityJSON building models."""
+"""Building surface area metrics for CityJSON building models."""
 
 import copy
 import json
@@ -13,7 +13,7 @@ from pymeshfix import MeshFix
 from shapely import MultiPolygon
 from shapely.geometry import Polygon
 
-from bag3d_surfaces import cityjson, geometry
+from building_surfaces import cityjson, geometry
 
 CityJSONDict = dict[str, Any]
 

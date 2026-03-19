@@ -1,4 +1,4 @@
-"""Integration tests for bag3d_surfaces.walls.shared_walls.
+"""Integration tests for building_surfaces.walls.shared_walls.
 
 Geometry setup
 --------------
@@ -13,7 +13,7 @@ Shared wall: x=10 plane, 5 m wide × 8 m tall → 40 m²
 import pytest
 from shapely import MultiPolygon
 
-from bag3d_surfaces.walls import shared_walls
+from building_surfaces.walls import shared_walls
 
 # ---------------------------------------------------------------------------
 # Fixtures

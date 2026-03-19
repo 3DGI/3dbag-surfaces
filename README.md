@@ -1,6 +1,6 @@
-# party-walls
+# building-surfaces
 
-Computes shared and exterior wall metrics between adjacent CityJSON buildings.
+Computes building surface area metrics from adjacent CityJSON buildings.
 
 ## Installation
 
@@ -20,7 +20,7 @@ The second command enables git hooks that automatically sync dependencies when b
 ## Usage
 
 ```python
-from party_walls.walls import CityModel, shared_walls, write_cityjsonfeature
+from building_surfaces.walls import CityModel, shared_walls, write_cityjsonfeature
 
 result = shared_walls(
     target=(cityjson_dict, "building-part-id"),
@@ -68,5 +68,9 @@ uv run ruff format src/ tests/  # format
 
 ## Acknowledgement
 
-This repo is a trimmed-down version of [tudelft3d/3d-building-metrics](https://github.com/tudelft3d/3d-building-metrics) .
-
+`helpers/geometry.py`, `geometry.py`, and `cityjson.py` are derived from
+[tudelft3d/3d-building-metrics](https://github.com/tudelft3d/3d-building-metrics)
+(MIT License, Copyright 2021 3D geoinformation research group at TU Delft).
+The code was modernised with type annotations, updated to current PyVista APIs,
+and extended with flat/sloped roof classification and an alternative clustering method.
+`walls.py` is original to this project.

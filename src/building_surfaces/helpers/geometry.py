@@ -1,4 +1,9 @@
-"""Module with functions for 3D geometrical operations"""
+"""Module with functions for 3D geometrical operations.
+
+Derived from https://github.com/tudelft3d/3d-building-metrics (MIT License,
+Copyright 2021 3D geoinformation research group at TU Delft). Modernised with
+type annotations.
+"""
 
 from typing import Any
 

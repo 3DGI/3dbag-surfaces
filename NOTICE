@@ -1,0 +1,13 @@
+building-surfaces
+Copyright (c) 2023-2026 3DGI
+
+This product includes code derived from tudelft3d/3d-building-metrics
+(https://github.com/tudelft3d/3d-building-metrics),
+Copyright (c) 2021 3D geoinformation research group at TU Delft,
+licensed under the MIT License (see LICENSE).
+
+The following source files are based on or copied from that project:
+
+  src/building_surfaces/helpers/geometry.py  ←  helpers/geometry.py
+  src/building_surfaces/geometry.py          ←  geometry.py
+  src/building_surfaces/cityjson.py          ←  cityjson.py

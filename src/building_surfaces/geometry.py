@@ -1,4 +1,10 @@
-"""Module to manipulate geometry of pyvista meshes"""
+"""Module to manipulate geometry of pyvista meshes.
+
+Derived from https://github.com/tudelft3d/3d-building-metrics (MIT License,
+Copyright 2021 3D geoinformation research group at TU Delft). Modernised with
+type annotations and extended with flat/sloped roof classification and an
+alternative clustering method.
+"""
 
 from typing import cast
 
@@ -10,7 +16,7 @@ from shapely import Polygon, intersects
 from shapely.geometry.base import BaseGeometry
 from sklearn.cluster import AgglomerativeClustering
 
-from bag3d_surfaces.helpers.geometry import plane_params, project_mesh, to_3d
+from building_surfaces.helpers.geometry import plane_params, project_mesh, to_3d
 
 
 def get_points_of_type(

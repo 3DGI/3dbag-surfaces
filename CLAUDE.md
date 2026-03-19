@@ -23,7 +23,7 @@ uv run ruff format src/ tests/
 
 ## Architecture
 
-`party-walls` is a Python library that computes shared and exterior wall metrics between adjacent CityJSON buildings.
+`building-surfaces` (`building_surfaces`) is a Python library that computes shared and exterior wall metrics between adjacent CityJSON buildings.
 
 ### Data Flow
 
@@ -37,7 +37,7 @@ CityJSON dict (raw JSON)
 
 ### Key Modules
 
-- **`walls.py`** — Public API. `CityModel` loads and transforms CityJSON; `shared_walls()` is the main entry point.
+- **`walls.py`** — Public API. `CityModel` loads and transforms CityJSON; `shared_walls()` is the main entry point; `write_cityjsonfeature()` injects computed `b3_*` attributes back into a CityJSONFeature and writes it to disk.
 - **`cityjson.py`** — CityJSON parsing: extracts boundary data, converts to Shapely or PyVista meshes.
 - **`geometry.py`** — Higher-level mesh operations: `intersect_surfaces()` (core algorithm), `area_by_surface()`, `cluster_meshes()`.
 - **`helpers/geometry.py`** — Low-level 3D math: plane projection, normal computation, triangulation via `mapbox_earcut`.
@@ -57,7 +57,7 @@ CityJSON dict (raw JSON)
 - **Semantic surfaces**: CityJSON semantics (`GroundSurface`, `WallSurface`, `RoofSurface`) are propagated as PyVista cell data and used throughout for filtering/classification.
 - **Numerical stability**: Meshes are translated near the origin before intersection to avoid floating-point issues with large real-world coordinates (e.g. Dutch RD New).
 - **Two-stage intersection**: (1) Agglomerative clustering groups coplanar faces across buildings; (2) Shapely computes polygon intersections on projected 2D planes.
-- **Clustering**: `cluster_meshes()` defaults to `old_cluster_method=True` (`cluster_faces_simple`), which uses a distance-matrix approach on (nx, ny, d) plane params. The alternative (`cluster_faces_alternative`) separates angle and distance clustering via two `AgglomerativeClustering` passes.
+- **Clustering**: `cluster_meshes()` defaults to `old_cluster_method=True` (`cluster_faces_simple`), which drops the z-component (valid for vertical walls) and uses a distance-matrix approach on (nx, ny, d) plane params. The alternative (`cluster_faces_alternative`) separates angle and distance clustering via two `AgglomerativeClustering` passes.
 - **Immutability**: Input CityJSON dicts are deep-copied before mutation, preserving caller data.
 - **Package manager**: `uv` with `hatchling` build backend, `src/` layout.
 

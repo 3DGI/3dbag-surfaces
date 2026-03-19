@@ -1,4 +1,9 @@
-"""Module with functions for manipulating CityJSON data"""
+"""Module with functions for manipulating CityJSON data.
+
+Derived from https://github.com/tudelft3d/3d-building-metrics (MIT License,
+Copyright 2021 3D geoinformation research group at TU Delft). Modernised with
+type annotations and updated PyVista API calls.
+"""
 
 from typing import Any, cast
 
@@ -7,7 +12,7 @@ import numpy.typing as npt
 import pyvista as pv
 from shapely.geometry import MultiPolygon, Polygon
 
-from bag3d_surfaces.helpers.geometry import (
+from building_surfaces.helpers.geometry import (
     triangulate_polygon,
 )
 

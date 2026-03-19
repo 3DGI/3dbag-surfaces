@@ -12,7 +12,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bag3d-surfaces"
+name = "building-surfaces"
 version = "2026.1005"
 source = { editable = "." }
 dependencies = [

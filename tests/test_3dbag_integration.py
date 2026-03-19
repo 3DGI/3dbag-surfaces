@@ -16,7 +16,11 @@ from typing import Any
 import pytest
 from shapely import MultiPolygon
 
-from bag3d_surfaces.walls import SharedWallResult, shared_walls, write_cityjsonfeature
+from building_surfaces.walls import (
+    SharedWallResult,
+    shared_walls,
+    write_cityjsonfeature,
+)
 
 # ---------------------------------------------------------------------------
 # Module-level setup
