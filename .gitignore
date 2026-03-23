@@ -8,3 +8,5 @@
 # Test data
 tests/data
 tests/output
+
+scripts/profiles

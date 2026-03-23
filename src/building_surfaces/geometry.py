@@ -144,9 +144,9 @@ def area_by_surface(
 
 def face_planes(mesh: pv.PolyData) -> list[npt.NDArray[np.float64]]:
     """Return the params of all planes in a given mesh"""
-
+    all_normals = mesh.face_normals  # compute once; indexing this property triggers compute_normals() each call
     return [
-        plane_params(mesh.face_normals[i], mesh.get_cell(i).points[0])
+        plane_params(all_normals[i], mesh.get_cell(i).points[0])
         for i in range(mesh.n_cells)
     ]
 
