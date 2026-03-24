@@ -145,7 +145,9 @@ def area_by_surface(
 
 def face_planes(mesh: pv.PolyData) -> list[npt.NDArray[np.float64]]:
     """Return the params of all planes in a given mesh"""
-    all_normals = mesh.face_normals  # compute once; indexing this property triggers compute_normals() each call
+    all_normals = (
+        mesh.face_normals
+    )  # compute once; indexing this property triggers compute_normals() each call
     return [
         plane_params(all_normals[i], mesh.get_cell(i).points[0])
         for i in range(mesh.n_cells)
@@ -371,7 +373,9 @@ def intersect_surfaces(
         msurfaces = [
             cast(
                 pv.PolyData,
-                mesh.extract_cells(idxs[i]).extract_surface(algorithm='dataset_surface'),
+                mesh.extract_cells(idxs[i]).extract_surface(
+                    algorithm="dataset_surface"
+                ),
             )
             for i, mesh in enumerate(meshes_to_cluster)
         ]

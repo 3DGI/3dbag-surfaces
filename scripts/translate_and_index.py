@@ -1,5 +1,6 @@
 """
-Translate CityJSONL features to a global coordinate transform and build a building adjacency index.
+Translate CityJSONL features to a global coordinate transform and build a
+building adjacency index.
 
 Usage:
     uv run --with geopandas scripts/translate_and_index.py

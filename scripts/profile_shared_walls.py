@@ -259,7 +259,7 @@ def profile_all(
     timings.sort(key=lambda x: x[1], reverse=True)
     print("\nTop 10 slowest buildings:")
     print(f"  {'pand_id':<55} {'adj':>5} {'time':>8}")
-    print(f"  {'-'*55} {'-'*5} {'-'*8}")
+    print(f"  {'-' * 55} {'-' * 5} {'-' * 8}")
     for pid, t in timings[:10]:
         n_adj = len([a for a in adjacency.get(pid, []) if a in features])
         print(f"  {pid:<55} {n_adj:>5} {t:>8.2f}s")
@@ -271,8 +271,9 @@ def profile_all(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         "--data-dir",
         type=Path,
@@ -323,8 +324,9 @@ def main() -> None:
             print(f"Error: unknown building IDs: {unknown}", file=sys.stderr)
             sys.exit(1)
         for pand_id in args.buildings:
-            profile_building(pand_id, features, adjacency, args.output_dir,
-                             print_stats=True)
+            profile_building(
+                pand_id, features, adjacency, args.output_dir, print_stats=True
+            )
     else:
         pand_ids = sorted(features.keys())
         print(f"\nProfiling all {len(pand_ids)} buildings (aggregate) ...")
