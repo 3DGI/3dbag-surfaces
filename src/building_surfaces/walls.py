@@ -120,8 +120,11 @@ def shared_walls(
     shared_area = 0.0
     shared_polys: list[Polygon] = []
 
+    # Precompute target wall mesh and plane params once; reused for each adjacent.
+    target_wall_mesh, target_planes = geometry.prepare_wall_mesh(target_tri_mesh)
+
     for adj_mesh in adj_tri_meshes:
-        walls = geometry.intersect_surfaces([target_tri_mesh, adj_mesh])
+        walls = geometry.intersect_walls(target_wall_mesh, target_planes, adj_mesh)
         for wall in walls:
             shared_area += float(wall["area"][0])
             shared_polys.append(Polygon(wall["pts"] + t_origin))

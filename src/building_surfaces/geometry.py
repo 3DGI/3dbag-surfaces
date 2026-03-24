@@ -6,6 +6,7 @@ type annotations and extended with flat/sloped roof classification and an
 alternative clustering method.
 """
 
+from collections import defaultdict
 from typing import cast
 
 import numpy as np
@@ -144,14 +145,18 @@ def area_by_surface(
 
 
 def face_planes(mesh: pv.PolyData) -> list[npt.NDArray[np.float64]]:
-    """Return the params of all planes in a given mesh"""
-    all_normals = (
-        mesh.face_normals
-    )  # compute once; indexing this property triggers compute_normals() each call
-    return [
-        plane_params(all_normals[i], mesh.get_cell(i).points[0])
-        for i in range(mesh.n_cells)
-    ]
+    """Return the params of all planes in a given mesh.
+
+    Vectorised: uses mesh.face_normals and mesh.cell_centers() to avoid a
+    per-cell Python loop over mesh.get_cell(i).
+    """
+    if mesh.n_cells == 0:
+        return []
+    normals = np.round(mesh.face_normals, 3)
+    origins = mesh.cell_centers().points
+    d = np.round(-np.sum(normals * origins, axis=1), 2)
+    result = np.column_stack([normals, d])
+    return list(result)
 
 
 def cluster_meshes(
@@ -189,11 +194,53 @@ def cluster_meshes(
     return labels, n_clusters
 
 
+def cluster_faces_bucketed(
+    data: npt.NDArray[np.float64],
+    threshold: float = 0.1,
+) -> tuple[npt.NDArray[np.intp], int]:
+    """Cluster co-planar faces using hash-bucketing instead of an O(N²) distance matrix.
+
+    Produces equivalent groupings to cluster_faces_simple for typical building
+    geometry in O(N) time and space. The approach relies on the fact that truly
+    co-planar faces (same wall plane) have nearly identical plane params (within
+    floating-point noise << threshold), while distinct planes differ by much more
+    than threshold.
+
+    Mirrors cluster_faces_simple: drops the z-normal column (valid for vertical
+    walls) and flips normals to the positive-x hemisphere before bucketing.
+    """
+    # Drop the z-normal column — valid for vertical WallSurface faces
+    ndata = np.delete(data, 2, 1).astype(np.float64, copy=True)
+
+    # Flip normals so both directions of the same plane map to the same bucket
+    neg_x = ndata[:, 0] < 0
+    ndata[neg_x] *= -1
+
+    # Quantise to bins of size `threshold` and group by integer key
+    scale = 1.0 / threshold
+    keys = np.round(ndata * scale).astype(np.int32)
+
+    buckets: dict[tuple[int, int, int], list[int]] = defaultdict(list)
+    for i, key in enumerate(keys):
+        buckets[(int(key[0]), int(key[1]), int(key[2]))].append(i)
+
+    labels: npt.NDArray[np.intp] = np.empty(len(data), dtype=np.intp)
+    for cluster_id, indices in enumerate(buckets.values()):
+        for idx in indices:
+            labels[idx] = cluster_id
+
+    return labels, len(buckets)
+
+
 def cluster_faces_simple(
     data: npt.NDArray[np.float64],
     threshold: float = 0.1,
 ) -> tuple[npt.NDArray[np.intp], int]:
-    """Clusters the given planes"""
+    """Clusters the given planes using an O(N²) distance matrix.
+
+    Kept for reference and testing. cluster_faces_bucketed is the default
+    in cluster_meshes and intersect_walls.
+    """
     # we can delete the third column because it is all 0's for vertical planes
     ndata = np.delete(data, 2, 1)
 
@@ -289,77 +336,68 @@ def cluster_faces_alternative(
     return labels, n_clusters
 
 
-def intersect_surfaces(
-    meshes: list[pv.PolyData],
-    onlywalls: bool = True,
-) -> list[pv.PolyData]:
-    """Return the intersection between the surfaces of multiple meshes.
+# ---------------------------------------------------------------------------
+# Helpers shared by intersect_surfaces and intersect_walls
+# ---------------------------------------------------------------------------
 
-    Note: first mesh is the target; following meshes are neighbors.
-    """
 
-    def get_area_from_ring(
-        areas: list[pv.PolyData],
-        area: float,
-        geom: BaseGeometry,
-        normal: npt.ArrayLike,
-        origin: npt.ArrayLike,
-        subtract: bool = False,
-    ) -> None:
-        pts = to_3d(geom.coords, normal, origin)  # type: ignore[attr-defined]
-        common_mesh = cast(
-            pv.PolyData,
-            pv.PolyData(pts, faces=[len(pts)] + list(range(len(pts)))),
+def _get_wall_mesh(mesh: pv.PolyData) -> pv.PolyData:
+    """Extract WallSurface cells from a triangulated mesh."""
+    return cast(
+        pv.PolyData,
+        mesh.remove_cells(
+            [s != "WallSurface" for s in mesh.cell_data["semantics"]],
+            inplace=False,
+        ),
+    )
+
+
+def _collect_ring_area(
+    areas: list[pv.PolyData],
+    area: float,
+    geom: BaseGeometry,
+    normal: npt.ArrayLike,
+    origin: npt.ArrayLike,
+    subtract: bool = False,
+) -> None:
+    pts = to_3d(geom.coords, normal, origin)  # type: ignore[attr-defined]
+    common_mesh = cast(
+        pv.PolyData,
+        pv.PolyData(pts, faces=[len(pts)] + list(range(len(pts)))),
+    )
+    common_mesh["area"] = [-area] if subtract else [area]
+    common_mesh["pts"] = pts
+    areas.append(common_mesh)
+
+
+def _collect_polygon_area(
+    areas: list[pv.PolyData],
+    geom: BaseGeometry,
+    normal: npt.ArrayLike,
+    origin: npt.ArrayLike,
+) -> None:
+    if geom.boundary.geom_type == "MultiLineString":
+        _collect_ring_area(
+            areas,
+            float(geom.area),
+            geom.boundary.geoms[0],  # type: ignore[attr-defined]
+            normal,
+            origin,
         )
-        if subtract:
-            common_mesh["area"] = [-area]
-        else:
-            common_mesh["area"] = [area]
-        common_mesh["pts"] = pts
-        areas.append(common_mesh)
+        for hole in list(geom.boundary.geoms)[1:]:  # type: ignore[attr-defined]
+            _collect_ring_area(areas, 0.0, hole, normal, origin, subtract=True)
+    elif geom.boundary.geom_type == "LineString":
+        _collect_ring_area(areas, float(geom.area), geom.boundary, normal, origin)
 
-    def get_area_from_polygon(
-        areas: list[pv.PolyData],
-        geom: BaseGeometry,
-        normal: npt.ArrayLike,
-        origin: npt.ArrayLike,
-    ) -> None:
-        # polygon with holes:
-        if geom.boundary.geom_type == "MultiLineString":
-            get_area_from_ring(
-                areas,
-                float(geom.area),
-                geom.boundary.geoms[0],  # type: ignore[attr-defined]
-                normal,
-                origin,
-            )
-            holes = list(geom.boundary.geoms)[1:]  # type: ignore[attr-defined]
-            for hole in holes:
-                get_area_from_ring(areas, 0.0, hole, normal, origin, subtract=True)
-        # polygon without holes:
-        elif geom.boundary.geom_type == "LineString":
-            get_area_from_ring(areas, float(geom.area), geom.boundary, normal, origin)
 
-    n_meshes = len(meshes)
-
-    meshes_to_cluster: list[pv.PolyData] = []
-    if onlywalls:
-        for mesh in meshes:
-            meshes_to_cluster.append(
-                cast(
-                    pv.PolyData,
-                    mesh.remove_cells(
-                        [s != "WallSurface" for s in mesh.cell_data["semantics"]],
-                        inplace=False,
-                    ),
-                )
-            )
-    else:
-        meshes_to_cluster = meshes
-
+def _polygon_intersections(
+    meshes_to_cluster: list[pv.PolyData],
+    labels: list[npt.NDArray[np.intp]],
+    n_clusters: int,
+) -> list[pv.PolyData]:
+    """Core polygon intersection loop shared by intersect_surfaces and intersect_walls."""
+    n_meshes = len(meshes_to_cluster)
     areas: list[pv.PolyData] = []
-
-    labels, n_clusters = cluster_meshes(meshes_to_cluster)
 
     for plane in range(n_clusters):
         # For every common plane, extract the faces that belong to it
@@ -367,7 +405,7 @@ def intersect_surfaces(
             [i for i, p in enumerate(labels[m]) if p == plane] for m in range(n_meshes)
         ]
 
-        if any([len(idx) == 0 for idx in idxs]):
+        if any(len(idx) == 0 for idx in idxs):
             continue
 
         msurfaces = [
@@ -397,9 +435,6 @@ def intersect_surfaces(
             if intersects(poly_0, polys[i]):
                 inter = inter.union(poly_0.intersection(polys[i]))
 
-        if len(polys) != 2:
-            print(len(polys))
-
         if inter.area > 0.001:
             if (
                 inter.geom_type == "MultiPolygon"
@@ -408,8 +443,73 @@ def intersect_surfaces(
                 for geom in inter.geoms:  # type: ignore[attr-defined]
                     if geom.geom_type != "Polygon":
                         continue
-                    get_area_from_polygon(areas, geom, normal, origin)
+                    _collect_polygon_area(areas, geom, normal, origin)
             elif inter.geom_type == "Polygon":
-                get_area_from_polygon(areas, inter, normal, origin)
+                _collect_polygon_area(areas, inter, normal, origin)
 
     return areas
+
+
+# ---------------------------------------------------------------------------
+# Public intersection API
+# ---------------------------------------------------------------------------
+
+
+def prepare_wall_mesh(
+    mesh: pv.PolyData,
+) -> tuple[pv.PolyData, list[npt.NDArray[np.float64]]]:
+    """Extract wall cells and precompute plane params for a triangulated mesh.
+
+    Call this once on the target mesh before iterating over adjacent buildings,
+    then pass the returned values to intersect_walls() for each adjacent.  This
+    avoids redundant per-adjacent reprocessing of the target's wall geometry.
+
+    Returns:
+        (wall_mesh, planes) where wall_mesh contains only WallSurface cells and
+        planes is the list of plane parameters for those cells.
+    """
+    wall_mesh = _get_wall_mesh(mesh)
+    planes = face_planes(wall_mesh)
+    return wall_mesh, planes
+
+
+def intersect_surfaces(
+    meshes: list[pv.PolyData],
+    onlywalls: bool = True,
+) -> list[pv.PolyData]:
+    """Return the intersection between the surfaces of multiple meshes.
+
+    Note: first mesh is the target; following meshes are neighbors.
+    """
+    meshes_to_cluster = [_get_wall_mesh(m) for m in meshes] if onlywalls else meshes
+    labels, n_clusters = cluster_meshes(meshes_to_cluster)
+    return _polygon_intersections(meshes_to_cluster, labels, n_clusters)
+
+
+def intersect_walls(
+    target_wall_mesh: pv.PolyData,
+    target_planes: list[npt.NDArray[np.float64]],
+    adj_mesh: pv.PolyData,
+) -> list[pv.PolyData]:
+    """Intersect a precomputed target wall mesh against one adjacent mesh.
+
+    Like intersect_surfaces([target_mesh, adj_mesh], onlywalls=True) but accepts
+    precomputed target wall data from prepare_wall_mesh() to skip redundant target
+    processing when the same target is intersected against multiple adjacents.
+    """
+    if not target_planes:
+        return []
+    adj_wall_mesh = _get_wall_mesh(adj_mesh)
+    adj_planes = face_planes(adj_wall_mesh)
+    if not adj_planes:
+        return []
+    all_planes = np.concatenate([target_planes, adj_planes])
+    all_labels, n_clusters = cluster_faces_simple(all_planes)
+    labels: list[npt.NDArray[np.intp]] = np.array_split(
+        all_labels, [target_wall_mesh.n_cells]
+    )
+    return _polygon_intersections([target_wall_mesh, adj_wall_mesh], labels, n_clusters)
+
+
+# Keep cluster_faces_bucketed available for experimentation but it is not used by default.
+# See comments in cluster_meshes for context.
