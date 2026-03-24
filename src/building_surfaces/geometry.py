@@ -126,8 +126,9 @@ def area_by_surface(
             ]
 
             if surface_type == "RoofSurface":
+                all_normals = sized.cell_normals
                 for idx in triangle_idxs:
-                    if sized.cell_normals[idx].dot([0, 0, 1]) < sloped_threshold:
+                    if all_normals[idx].dot([0, 0, 1]) < sloped_threshold:
                         area["RoofSurfaceSloped"] += float(surface_areas[idx])
                     else:
                         area["RoofSurfaceFlat"] += float(surface_areas[idx])
@@ -370,7 +371,7 @@ def intersect_surfaces(
         msurfaces = [
             cast(
                 pv.PolyData,
-                mesh.extract_cells(idxs[i]).extract_surface(),
+                mesh.extract_cells(idxs[i]).extract_surface(algorithm='dataset_surface'),
             )
             for i, mesh in enumerate(meshes_to_cluster)
         ]

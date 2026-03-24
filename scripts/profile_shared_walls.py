@@ -192,7 +192,12 @@ def profile_building(
     pr = cProfile.Profile()
     t0 = perf_counter()
     pr.enable()
-    shared_walls(target=(copy.deepcopy(cm), part_id), adjacent=adjacent)
+    try:
+        shared_walls(target=(copy.deepcopy(cm), part_id), adjacent=adjacent)
+    except ValueError as exc:
+        pr.disable()
+        print(f"\n  ✗ skipped {pand_id}: {exc}")
+        return 0.0
     pr.disable()
     elapsed = perf_counter() - t0
 
@@ -218,6 +223,7 @@ def profile_all(
 
     pr = cProfile.Profile()
     timings: list[tuple[str, float]] = []
+    skipped: list[str] = []
     total_t0 = perf_counter()
 
     for pand_id in pand_ids:
@@ -226,7 +232,14 @@ def profile_all(
         adjacent = [(copy.deepcopy(features[a][0]), features[a][1]) for a in adj_ids]
         t0 = perf_counter()
         pr.enable()
-        shared_walls(target=(copy.deepcopy(cm), part_id), adjacent=adjacent)
+        try:
+            shared_walls(target=(copy.deepcopy(cm), part_id), adjacent=adjacent)
+        except ValueError as exc:
+            pr.disable()
+            skipped.append(pand_id)
+            sys.stdout.write(f"\r  skipped {pand_id}: {exc}\n")
+            sys.stdout.flush()
+            continue
         pr.disable()
         timings.append((pand_id, perf_counter() - t0))
         sys.stdout.write(f"\r  processed {len(timings)}/{len(pand_ids)}")
@@ -234,6 +247,8 @@ def profile_all(
 
     total_elapsed = perf_counter() - total_t0
     print(f"\n  total wall-clock: {total_elapsed:.1f}s")
+    if skipped:
+        print(f"  {len(skipped)} buildings skipped (no LoD 2.2 geometry)")
 
     agg_path = output_dir / "aggregate.prof"
     pr.dump_stats(str(agg_path))
